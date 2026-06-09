@@ -22,7 +22,7 @@ export default function CampaignsPage() {
         const rows = data || []
         setCampaigns(rows)
         setFiltered(rows)
-        setMonths([...new Set(rows.map((r: any) => r.month))].sort().reverse())
+        setMonths(Array.from(new Set(rows.map((r: any) => r.month))).sort().reverse())
         setLoading(false)
       })
   }, [])
@@ -77,7 +77,7 @@ export default function CampaignsPage() {
         </div>
         <select
           value={selMonth} onChange={e => setSelMonth(e.target.value)}
-          className="px-3 py-2 text-sm border border-slate-200 rounded-lg
+          className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white
                      focus:outline-none focus:ring-2 focus:ring-blue-500/20">
           <option value="all">All months</option>
           {months.map(m => <option key={m} value={m}>{m}</option>)}
@@ -95,27 +95,27 @@ export default function CampaignsPage() {
               <tr>
                 <th>Campaign Name</th>
                 <th>Month</th>
-                <th className="text-right cursor-pointer hover:bg-navy/80"
+                <th className="text-right cursor-pointer hover:bg-blue-900"
                     onClick={() => toggleSort('spend')}>
                   <span className="flex items-center justify-end gap-1">
                     Spend <SortIcon k="spend" /></span>
                 </th>
-                <th className="text-right cursor-pointer hover:bg-navy/80"
+                <th className="text-right cursor-pointer hover:bg-blue-900"
                     onClick={() => toggleSort('cpc')}>
                   <span className="flex items-center justify-end gap-1">
                     CPC <SortIcon k="cpc" /></span>
                 </th>
-                <th className="text-right cursor-pointer hover:bg-navy/80"
+                <th className="text-right cursor-pointer hover:bg-blue-900"
                     onClick={() => toggleSort('cpm')}>
                   <span className="flex items-center justify-end gap-1">
                     CPM <SortIcon k="cpm" /></span>
                 </th>
-                <th className="text-right cursor-pointer hover:bg-navy/80"
+                <th className="text-right cursor-pointer hover:bg-blue-900"
                     onClick={() => toggleSort('clicks')}>
                   <span className="flex items-center justify-end gap-1">
                     Clicks <SortIcon k="clicks" /></span>
                 </th>
-                <th className="text-right cursor-pointer hover:bg-navy/80"
+                <th className="text-right cursor-pointer hover:bg-blue-900"
                     onClick={() => toggleSort('leads')}>
                   <span className="flex items-center justify-end gap-1">
                     Leads <SortIcon k="leads" /></span>
@@ -124,40 +124,53 @@ export default function CampaignsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c, i) => {
-                const cpcStatus = c.cpc > 15 ? 'danger' : c.cpc < 12 ? 'good' : 'warn'
-                return (
-                  <tr key={i}>
-                    <td className="max-w-[200px] font-medium text-slate-700 truncate"
-                        title={c.campaign_name}>{c.campaign_name}</td>
-                    <td className="text-slate-500">{c.month}</td>
-                    <td className="text-right font-semibold text-blue-700">{fmtRs(c.spend)}</td>
-                    <td className={`text-right font-medium
-                      ${cpcStatus === 'danger' ? 'text-red-600' :
-                        cpcStatus === 'good'   ? 'text-green-600' : 'text-amber-600'}`}>
-                      Rs.{c.cpc?.toFixed(2)}
-                    </td>
-                    <td className={`text-right ${c.cpm > 220 ? 'text-red-600 font-medium' : 'text-slate-600'}`}>
-                      Rs.{c.cpm?.toFixed(0)}
-                    </td>
-                    <td className="text-right text-slate-600">{(c.clicks || 0).toLocaleString()}</td>
-                    <td className="text-right font-medium text-green-700">{c.leads || 0}</td>
-                    <td className="text-right">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-                        ${c.leads === 0 && c.spend > 30000
-                          ? 'bg-red-100 text-red-700'
-                          : cpcStatus === 'good'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-slate-100 text-slate-500'}`}>
-                        {c.leads === 0 && c.spend > 30000 ? '⚠ No leads'
-                          : cpcStatus === 'good' ? '✓ Good CPC'
-                          : cpcStatus === 'danger' ? '↑ High CPC'
-                          : 'Normal'}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center text-slate-400 py-10">
+                    {campaigns.length === 0
+                      ? 'No campaign data — upload Meta CSV from the Upload Data page'
+                      : 'No campaigns match your search'}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((c, i) => {
+                  const cpcStatus = c.cpc > 15 ? 'danger' : c.cpc < 12 ? 'good' : 'warn'
+                  const waste = c.leads === 0 && c.spend > 30000
+                  return (
+                    <tr key={i}>
+                      <td className="max-w-[200px] font-medium text-slate-700 truncate"
+                          title={c.campaign_name}>{c.campaign_name}</td>
+                      <td className="text-slate-500">{c.month}</td>
+                      <td className="text-right font-semibold text-blue-700">{fmtRs(c.spend)}</td>
+                      <td className={`text-right font-medium
+                        ${cpcStatus === 'danger' ? 'text-red-600' :
+                          cpcStatus === 'good'   ? 'text-green-600' : 'text-amber-600'}`}>
+                        Rs.{c.cpc?.toFixed(2)}
+                      </td>
+                      <td className={`text-right ${c.cpm > 220 ? 'text-red-600 font-medium' : 'text-slate-600'}`}>
+                        Rs.{c.cpm?.toFixed(0)}
+                      </td>
+                      <td className="text-right text-slate-600">{(c.clicks || 0).toLocaleString()}</td>
+                      <td className="text-right font-medium text-green-700">{c.leads || 0}</td>
+                      <td className="text-right">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                          ${waste
+                            ? 'bg-red-100 text-red-700'
+                            : cpcStatus === 'good'
+                            ? 'bg-green-100 text-green-700'
+                            : cpcStatus === 'danger'
+                            ? 'bg-red-100 text-red-600'
+                            : 'bg-slate-100 text-slate-500'}`}>
+                          {waste ? '⚠ No leads'
+                            : cpcStatus === 'good' ? '✓ Good CPC'
+                            : cpcStatus === 'danger' ? '↑ High CPC'
+                            : 'Normal'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
