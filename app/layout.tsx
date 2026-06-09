@@ -1,6 +1,6 @@
 'use client'
 import './globals.css'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import Image from 'next/image'
@@ -12,42 +12,50 @@ import {
 import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { href: '/monthly', label: 'Monthly Analysis', icon: TrendingUp },
-  { href: '/channels', label: 'Channel Comparison', icon: BarChart3 },
-  { href: '/campaigns', label: 'Campaigns', icon: Target },
-  { href: '/influencers', label: 'Influencers', icon: Users },
-  { href: '/upload', label: 'Upload Data', icon: Upload },
-  { href: '/budget', label: 'Budget Settings', icon: Settings2 },
+  { href: '/dashboard',   label: 'Overview',          icon: LayoutDashboard },
+  { href: '/monthly',     label: 'Monthly Analysis',  icon: TrendingUp      },
+  { href: '/channels',    label: 'Channel Comparison',icon: BarChart3       },
+  { href: '/campaigns',   label: 'Campaigns',         icon: Target          },
+  { href: '/influencers', label: 'Influencers',       icon: Users           },
+  { href: '/upload',      label: 'Upload Data',       icon: Upload          },
+  { href: '/budget',      label: 'Budget Settings',   icon: Settings2       },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const [open, setOpen] = useState(false)
-  const [alerts, setAlerts] = useState(0)
-  const [month, setMonth] = useState('')
-  const [budget, setBudget] = useState<number | null>(null)
+  const pathname   = usePathname()
+  const [open,     setOpen]     = useState(false)
+  const [alerts,   setAlerts]   = useState(0)
+  const [month,    setMonth]    = useState('')
+  const [budget,   setBudget]   = useState<number | null>(null)
+  const [mounted,  setMounted]  = useState(false)
   const isAuth = !pathname?.startsWith('/login')
 
+  const loadSidebarData = useCallback(async () => {
+    if (!isAuth) return
+    const sb = createClient()
+    const currentMonth = new Date().toISOString().slice(0, 7)
+
+    // Run both queries in parallel
+    const [alertRes, budgetRes] = await Promise.all([
+      sb.from('alerts').select('id', { count: 'exact', head: true }).eq('resolved', false),
+      sb.from('monthly_budget').select('budget').eq('month', currentMonth).single()
+    ])
+
+    setAlerts(alertRes.count || 0)
+    setBudget(budgetRes.data?.budget || null)
+  }, [isAuth])
+
   useEffect(() => {
+    setMounted(true)
     const d = new Date()
-    const currentMonth = d.toISOString().slice(0, 7)
     setMonth(d.toLocaleString('default', { month: 'long', year: 'numeric' }))
+    loadSidebarData()
+  }, []) // Only run once on mount — not on every page change
 
-    if (isAuth) {
-      const sb = createClient()
-
-      // Load unresolved alert count
-      sb.from('alerts').select('id', { count: 'exact' })
-        .eq('resolved', false)
-        .then(({ count }) => setAlerts(count || 0))
-
-      // Load this month's budget dynamically
-      sb.from('monthly_budget').select('budget')
-        .eq('month', currentMonth).single()
-        .then(({ data }) => setBudget(data?.budget || null))
-    }
-  }, [pathname, isAuth])
+  // Close mobile menu on route change
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
 
   if (!isAuth) return <html lang="en"><body>{children}</body></html>
 
@@ -60,7 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {open && (
           <div className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-            onClick={() => setOpen(false)} />
+               onClick={() => setOpen(false)} />
         )}
 
         {/* ── SIDEBAR ── */}
@@ -75,13 +83,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="flex items-center justify-between">
               <div className="flex-1">
                 <Image src="/logo.png" alt="Idealz" width={130} height={54}
-                  className="object-contain" priority />
+                       className="object-contain" priority />
                 <div className="text-xs mt-1 font-medium" style={{ color: '#00B4D8' }}>
                   Marketing Analytics
                 </div>
               </div>
               <button className="lg:hidden text-white/50 hover:text-white ml-2"
-                onClick={() => setOpen(false)}>
+                      onClick={() => setOpen(false)}>
                 <X size={18} />
               </button>
             </div>
@@ -89,7 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           {/* Month + budget */}
           <div className="px-5 py-2.5 border-b border-white/5"
-            style={{ background: 'rgba(255,255,255,0.03)' }}>
+               style={{ background: 'rgba(255,255,255,0.03)' }}>
             <div className="text-xs text-slate-400">{month}</div>
             {budget !== null ? (
               <div className="text-xs font-semibold mt-0.5" style={{ color: '#00B4D8' }}>
@@ -115,14 +123,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <span className="flex-1 text-sm">{label}</span>
                   {href === '/upload' && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                      style={{ background: 'rgba(0,180,216,0.2)', color: '#00B4D8' }}>
+                          style={{ background: 'rgba(0,180,216,0.2)', color: '#00B4D8' }}>
                       Monthly
                     </span>
                   )}
-                  {href === '/budget' && budget === null && (
+                  {href === '/budget' && budget === null && mounted && (
                     <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                   )}
-                  {active && href !== '/budget' && (
+                  {active && (
                     <div className="w-1.5 h-1.5 rounded-full bg-[#00B4D8] shrink-0" />
                   )}
                 </Link>
@@ -133,7 +141,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Alert banner */}
           {alerts > 0 && (
             <div className="mx-3 mb-2 rounded-lg px-3 py-2.5 flex items-center gap-2"
-              style={{ background: 'rgba(192,57,43,0.2)', border: '1px solid rgba(192,57,43,0.4)' }}>
+                 style={{ background:'rgba(192,57,43,0.2)', border:'1px solid rgba(192,57,43,0.4)' }}>
               <Bell size={14} className="text-red-400 shrink-0" />
               <span className="text-red-300 text-xs">
                 {alerts} unresolved alert{alerts !== 1 ? 's' : ''}
@@ -155,7 +163,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="h-14 bg-white border-b border-slate-200 flex items-center
                              px-4 gap-4 shrink-0 shadow-sm">
             <button className="lg:hidden text-slate-500 hover:text-slate-700"
-              onClick={() => setOpen(true)}>
+                    onClick={() => setOpen(true)}>
               <Menu size={20} />
             </button>
 
@@ -173,7 +181,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             <div className="flex-1" />
 
-            {/* Dynamic budget pill */}
             {budget !== null ? (
               <div className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full
                               bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
@@ -182,7 +189,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             ) : (
               <Link href="/budget"
                 className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full
-                           bg-amber-50 text-amber-700 border border-amber-200 font-semibold hover:bg-amber-100">
+                           bg-amber-50 text-amber-700 border border-amber-200 font-semibold
+                           hover:bg-amber-100">
                 ⚠ Set monthly budget
               </Link>
             )}
