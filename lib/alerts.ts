@@ -2,12 +2,12 @@ import { createClient } from './supabase/client'
 import type { MetaCampaign, TikTokCampaign, Alert } from './types'
 
 const THRESHOLDS = {
-  META_CPC_MAX:      15,      // Rs.
-  META_CPM_MAX:      220,     // Rs.
-  META_CTR_MIN:      0.5,     // %
-  META_FREQ_MAX:     4.0,
-  ZERO_LEADS_SPEND:  30000,   // Rs. — flag if spent this much with 0 leads
-  TIKTOK_CPM_MAX:    0.80,    // USD
+  META_CPC_MAX:     15,
+  META_CPM_MAX:     220,
+  META_CTR_MIN:     0.5,
+  META_FREQ_MAX:    4.0,
+  ZERO_LEADS_SPEND: 30000,
+  TIKTOK_CPM_MAX:   0.80,
 }
 
 export async function runAlertChecks(
@@ -18,92 +18,96 @@ export async function runAlertChecks(
   const supabase = createClient()
   const newAlerts: Omit<Alert, 'id' | 'created_at'>[] = []
 
-  // ── Meta CPC checks ────────────────────────────────────────
   metaRows.forEach(row => {
-    if (row.cpc > THRESHOLDS.META_CPC_MAX) {
+    // CPC spike
+    if ((row.cpc ?? 0) > THRESHOLDS.META_CPC_MAX) {
       newAlerts.push({
         alert_type: 'cpc_spike',
-        message: `CPC Rs.${row.cpc.toFixed(2)} on "${row.campaign_name}" exceeds Rs.${THRESHOLDS.META_CPC_MAX} target`,
-        severity: row.cpc > 25 ? 'critical' : 'high',
+        message: `CPC Rs.${row.cpc?.toFixed(2)} on "${row.campaign_name}" exceeds Rs.${THRESHOLDS.META_CPC_MAX} target`,
+        severity: (row.cpc ?? 0) > 25 ? 'critical' : 'high',
         campaign_name: row.campaign_name,
         month,
-        value: row.cpc,
+        value: row.cpc ?? 0,
         threshold: THRESHOLDS.META_CPC_MAX,
         resolved: false,
       })
     }
 
-    if (row.cpm > THRESHOLDS.META_CPM_MAX) {
+    // CPM high
+    if ((row.cpm ?? 0) > THRESHOLDS.META_CPM_MAX) {
       newAlerts.push({
         alert_type: 'cpm_high',
-        message: `CPM Rs.${row.cpm.toFixed(0)} on "${row.campaign_name}" exceeds Rs.${THRESHOLDS.META_CPM_MAX}`,
+        message: `CPM Rs.${row.cpm?.toFixed(0)} on "${row.campaign_name}" exceeds Rs.${THRESHOLDS.META_CPM_MAX}`,
         severity: 'high',
         campaign_name: row.campaign_name,
         month,
-        value: row.cpm,
+        value: row.cpm ?? 0,
         threshold: THRESHOLDS.META_CPM_MAX,
         resolved: false,
       })
     }
 
-    if (row.leads === 0 && row.spend > THRESHOLDS.ZERO_LEADS_SPEND) {
+    // Zero leads with spend
+    if ((row.leads ?? 0) === 0 && (row.spend ?? 0) > THRESHOLDS.ZERO_LEADS_SPEND) {
       newAlerts.push({
         alert_type: 'zero_leads',
-        message: `Rs.${row.spend.toLocaleString()} spent on "${row.campaign_name}" with 0 leads — check campaign objective`,
+        message: `Rs.${row.spend?.toLocaleString()} spent on "${row.campaign_name}" with 0 leads — check campaign objective`,
         severity: 'critical',
         campaign_name: row.campaign_name,
         month,
-        value: row.spend,
+        value: row.spend ?? 0,
         threshold: THRESHOLDS.ZERO_LEADS_SPEND,
         resolved: false,
       })
     }
 
-    if (row.frequency > THRESHOLDS.META_FREQ_MAX) {
+    // High frequency
+    if ((row.frequency ?? 0) > THRESHOLDS.META_FREQ_MAX) {
       newAlerts.push({
         alert_type: 'high_frequency',
-        message: `Ad frequency ${row.frequency.toFixed(1)} on "${row.campaign_name}" — audience fatigue risk`,
+        message: `Ad frequency ${(row.frequency ?? 0).toFixed(1)} on "${row.campaign_name}" — audience fatigue risk`,
         severity: 'medium',
         campaign_name: row.campaign_name,
         month,
-        value: row.frequency,
+        value: row.frequency ?? 0,
         threshold: THRESHOLDS.META_FREQ_MAX,
         resolved: false,
       })
     }
 
-    if (row.ctr < THRESHOLDS.META_CTR_MIN && row.impressions > 10000) {
+    // Low CTR
+    if ((row.ctr ?? 0) < THRESHOLDS.META_CTR_MIN && (row.impressions ?? 0) > 10000) {
       newAlerts.push({
         alert_type: 'low_ctr',
-        message: `CTR ${row.ctr.toFixed(2)}% on "${row.campaign_name}" is below ${THRESHOLDS.META_CTR_MIN}% — refresh creative`,
+        message: `CTR ${(row.ctr ?? 0).toFixed(2)}% on "${row.campaign_name}" is below ${THRESHOLDS.META_CTR_MIN}% — refresh creative`,
         severity: 'medium',
         campaign_name: row.campaign_name,
         month,
-        value: row.ctr,
+        value: row.ctr ?? 0,
         threshold: THRESHOLDS.META_CTR_MIN,
         resolved: false,
       })
     }
   })
 
-  // ── TikTok CPM checks ──────────────────────────────────────
+  // TikTok CPM
   tiktokRows.forEach(row => {
-    if (row.cpm > THRESHOLDS.TIKTOK_CPM_MAX) {
+    if ((row.cpm ?? 0) > THRESHOLDS.TIKTOK_CPM_MAX) {
       newAlerts.push({
         alert_type: 'tiktok_cpm_high',
-        message: `TikTok CPM $${row.cpm.toFixed(2)} on "${row.campaign_name}" exceeds $${THRESHOLDS.TIKTOK_CPM_MAX} target`,
+        message: `TikTok CPM $${(row.cpm ?? 0).toFixed(2)} on "${row.campaign_name}" exceeds $${THRESHOLDS.TIKTOK_CPM_MAX} target`,
         severity: 'medium',
         campaign_name: row.campaign_name,
         month,
-        value: row.cpm,
+        value: row.cpm ?? 0,
         threshold: THRESHOLDS.TIKTOK_CPM_MAX,
         resolved: false,
       })
     }
   })
 
-  // ── Monthly budget check ───────────────────────────────────
-  const totalSpend = metaRows.reduce((sum, r) => sum + r.spend, 0)
+  // Monthly budget warning
+  const totalSpend = metaRows.reduce((sum, r) => sum + (r.spend ?? 0), 0)
   if (totalSpend > 2700000) {
     newAlerts.push({
       alert_type: 'budget_warning',
@@ -116,7 +120,6 @@ export async function runAlertChecks(
     })
   }
 
-  // ── Insert all new alerts ──────────────────────────────────
   if (newAlerts.length > 0) {
     await supabase.from('alerts').insert(newAlerts)
   }
