@@ -2,8 +2,7 @@
 import './globals.css'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import Image from 'next/image'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, TrendingUp, BarChart3, Target,
   Users, Upload, Bell, LogOut, Menu, X, ChevronRight,
@@ -22,27 +21,29 @@ const NAV = [
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname   = usePathname()
-  const [open,     setOpen]     = useState(false)
-  const [alerts,   setAlerts]   = useState(0)
-  const [month,    setMonth]    = useState('')
-  const [budget,   setBudget]   = useState<number | null>(null)
-  const [mounted,  setMounted]  = useState(false)
+  const pathname  = usePathname()
+  const router    = useRouter()
+  const [open,    setOpen]    = useState(false)
+  const [alerts,  setAlerts]  = useState(0)
+  const [month,   setMonth]   = useState('')
+  const [budget,  setBudget]  = useState<number | null>(null)
+  const [mounted, setMounted] = useState(false)
   const isAuth = !pathname?.startsWith('/login')
 
   const loadSidebarData = useCallback(async () => {
     if (!isAuth) return
-    const sb = createClient()
-    const currentMonth = new Date().toISOString().slice(0, 7)
-
-    // Run both queries in parallel
-    const [alertRes, budgetRes] = await Promise.all([
-      sb.from('alerts').select('id', { count: 'exact', head: true }).eq('resolved', false),
-      sb.from('monthly_budget').select('budget').eq('month', currentMonth).single()
-    ])
-
-    setAlerts(alertRes.count || 0)
-    setBudget(budgetRes.data?.budget || null)
+    try {
+      const sb = createClient()
+      const currentMonth = new Date().toISOString().slice(0, 7)
+      const [alertRes, budgetRes] = await Promise.all([
+        sb.from('alerts').select('id', { count: 'exact', head: true }).eq('resolved', false),
+        sb.from('monthly_budget').select('budget').eq('month', currentMonth).single()
+      ])
+      setAlerts(alertRes.count || 0)
+      setBudget(budgetRes.data?.budget || null)
+    } catch (e) {
+      console.error('Sidebar data error:', e)
+    }
   }, [isAuth])
 
   useEffect(() => {
@@ -50,12 +51,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     const d = new Date()
     setMonth(d.toLocaleString('default', { month: 'long', year: 'numeric' }))
     loadSidebarData()
-  }, []) // Only run once on mount — not on every page change
+  }, [])
 
-  // Close mobile menu on route change
   useEffect(() => {
     setOpen(false)
   }, [pathname])
+
+  // ── SIGN OUT ──────────────────────────────────────────────
+  async function handleSignOut() {
+    try {
+      const sb = createClient()
+      await sb.auth.signOut()
+    } catch (e) {
+      console.error('Sign out error:', e)
+    } finally {
+      // Always redirect to login regardless
+      router.push('/login')
+      router.refresh()
+    }
+  }
 
   if (!isAuth) return <html lang="en"><body>{children}</body></html>
 
@@ -78,12 +92,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           ${open ? 'translate-x-0' : '-translate-x-full'}
         `} style={{ background: 'linear-gradient(180deg,#0A2342 0%,#0d2d56 100%)' }}>
 
-          {/* Logo */}
+          {/* ── LOGO ── */}
           <div className="px-5 py-4 border-b border-white/10">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <Image src="/logo.png" alt="Idealz" width={130} height={54}
-                       className="object-contain" priority />
+                {/* Logo image with fallback text */}
+                <div className="flex items-center gap-2">
+                  <img
+                    src="/logo.png"
+                    alt="Idealz"
+                    width={130}
+                    height={54}
+                    className="object-contain"
+                    onError={(e) => {
+                      // If logo fails to load show text fallback
+                      const target = e.currentTarget
+                      target.style.display = 'none'
+                      const fallback = target.nextElementSibling as HTMLElement
+                      if (fallback) fallback.style.display = 'flex'
+                    }}
+                  />
+                  {/* Text fallback if image fails */}
+                  <div style={{ display: 'none' }}
+                    className="items-center">
+                    <span className="text-2xl font-black tracking-wide">
+                      <span className="text-white">!</span>
+                      <span style={{ color: '#4A9FE8' }}>D</span>
+                      <span className="text-white">ealz</span>
+                    </span>
+                  </div>
+                </div>
                 <div className="text-xs mt-1 font-medium" style={{ color: '#00B4D8' }}>
                   Marketing Analytics
                 </div>
@@ -117,8 +155,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               const active = pathname?.startsWith(href)
               return (
                 <Link key={href} href={href}
-                  className={`nav-link ${active ? 'active' : ''}`}
-                  onClick={() => setOpen(false)}>
+                  className={`nav-link ${active ? 'active' : ''}`}>
                   <Icon size={16} />
                   <span className="flex-1 text-sm">{label}</span>
                   {href === '/upload' && (
@@ -149,9 +186,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           )}
 
-          {/* Footer */}
+          {/* ── SIGN OUT BUTTON ── */}
           <div className="px-3 pb-4 pt-3 border-t border-white/10">
-            <button className="nav-link w-full text-red-400 hover:text-red-300 hover:bg-red-900/20">
+            <button
+              onClick={handleSignOut}
+              className="nav-link w-full text-red-400 hover:text-red-300 hover:bg-red-900/20">
               <LogOut size={16} />
               <span className="text-sm">Sign Out</span>
             </button>
@@ -167,11 +206,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Menu size={20} />
             </button>
 
+            {/* !Dealz breadcrumb */}
             <div className="flex items-center gap-1.5 text-sm">
-              <span className="font-semibold text-slate-700">
-                <span className="text-slate-800">!</span>
+              <span className="font-bold text-slate-800">
+                <span>!</span>
                 <span style={{ color: '#1F5FA6' }}>D</span>
-                <span className="text-slate-800">ealz</span>
+                <span>ealz</span>
               </span>
               <ChevronRight size={14} className="text-slate-300" />
               <span className="text-slate-500">
@@ -211,7 +251,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </main>
         </div>
-
       </body>
     </html>
   )
